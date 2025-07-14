@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APPLICATION_ENV: "production"
+  RABBITMQ_HOST: "rabbitmq"
+  ELASTICSEARCH_HOST: "elasticsearch"
+  REDIS_HOST: "redis"

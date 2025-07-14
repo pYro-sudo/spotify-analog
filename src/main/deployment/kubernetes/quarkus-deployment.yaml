@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quarkus-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quarkus-app
+  template:
+    metadata:
+      labels:
+        app: quarkus-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        # Vault Agent annotations (optional for dynamic updates)
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "quarkus"
+        vault.hashicorp.com/agent-inject-secret-db-creds: "secret/data/quarkus/postgres"
+        vault.hashicorp.com/agent-inject-secret-jwt: "secret/data/quarkus/app"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - quarkus-app
+                topologyKey: kubernetes.io/hostname
+      serviceAccountName: quarkus-app
+      containers:
+        - name: quarkus-app
+          image: quarkus-app-image:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: quarkus-vault-secrets
+                  key: JWT_SECRET
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /q/health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /q/health/ready
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+      initContainers:
+        - name: vault-agent
+          image: vault:latest
+          command: ["vault", "agent", "-config=/vault/config/agent-config.hcl"]
+          volumeMounts:
+            - name: vault-config
+              mountPath: /vault/config
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault:8200"
+      volumes:
+        - name: vault-config
+          configMap:
+            name: vault-agent-config
+
+# kubectl autoscale deployment $quarkus-deployment$ --cpu-percent=50 --min=1 --max=10
