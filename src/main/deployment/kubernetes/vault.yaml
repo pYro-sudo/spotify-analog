@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  labels:
+    app: vault
+spec:
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+  clusterIP: None
+  selector:
+    app: vault
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+spec:
+  serviceName: vault
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault
+          image: vault:latest
+          args:
+            - server
+          ports:
+            - name: http
+              containerPort: 8200
+          env:
+            - name: VAULT_API_ADDR
+              value: "https://$(POD_IP):8200"
+            - name: VAULT_CLUSTER_ADDR
+              value: "https://$(POD_IP):8201"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+            - name: data
+              mountPath: /vault/data
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+data:
+  config.hcl: |
+    storage "raft" {
+      path = "/vault/data"
+      node_id = "vault_$(POD_NAME)"
+    }
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      tls_disable = true # In production, enable TLS with proper certs
+    }
+    cluster_addr = "https://$(POD_IP):8201"
+    api_addr = "https://$(POD_IP):8200"
+    ui = true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
