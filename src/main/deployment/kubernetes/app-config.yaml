@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APPLICATION_ENV: "production"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  POSTGRES_HOST: "postgres"
+  REDIS_HOST: "redis"
+  RABBITMQ_HOST: "rabbitmq"
