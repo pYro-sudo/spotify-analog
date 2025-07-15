@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vault-jwt-refresher
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: vault
+          restartPolicy: OnFailure
+          containers:
+            - name: vault-agent
+              image: vault:latest
+              args: ["agent", "-config=/etc/vault/agent-config.hcl"]
+              volumeMounts:
+                - name: config
+                  mountPath: /etc/vault
+                - name: secrets
+                  mountPath: /vault/secrets
+          volumes:
+            - name: config
+              configMap:
+                name: vault-agent-config
+            - name: secrets
+              persistentVolumeClaim:
+                claimName: vault-jwt-secrets-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-jwt-secrets-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
