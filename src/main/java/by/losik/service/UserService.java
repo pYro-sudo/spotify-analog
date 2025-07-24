@@ -412,4 +412,160 @@ public class UserService extends ServiceConfig {
                     }
                 });
     }
+
+    @Operation(summary = "Add subscriber to user",
+            description = "Adds a subscriber to a user's subscribers list if not already present")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Subscriber added to user's list"),
+            @APIResponse(responseCode = "404", description = "User not found"),
+            @APIResponse(responseCode = "400", description = "Bad request or operation failed")
+    })
+    @Retry(maxRetries = 3, delay = 500)
+    @Timeout(5000)
+    @CircuitBreaker(
+            requestVolumeThreshold = CIRCUIT_BREAKER_REQUEST_VOLUME,
+            failureRatio = CIRCUIT_BREAKER_FAILURE_RATIO,
+            delay = CIRCUIT_BREAKER_DELAY_MS
+    )
+    @CircuitBreakerName("add-subscriber-cb")
+    @Bulkhead(value = DEFAULT_BULKHEAD_VALUE)
+    @CacheInvalidate(cacheName = "user-cache")
+    public Uni<UserDTO> addSubscriber(
+            @Parameter(description = "User ID", example = "user-123", required = true)
+            String userId,
+            @Parameter(description = "Subscriber ID to add", example = "user-456", required = true)
+            String subscriberId) {
+        log.debug("Adding subscriber {} to user {}", subscriberId, userId);
+        return userRepository.addSubscriberToUser(userId, subscriberId)
+                .onItem().invoke(user -> log.debug("Successfully added subscriber {} to user {}", subscriberId, userId))
+                .onFailure().transform(e -> new RuntimeException("Failed to add subscriber to user", e));
+    }
+
+    @Operation(summary = "Remove subscriber from user",
+            description = "Removes a subscriber from a user's subscribers list")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Subscriber removed from user's list"),
+            @APIResponse(responseCode = "404", description = "User not found"),
+            @APIResponse(responseCode = "400", description = "Bad request or operation failed")
+    })
+    @Retry(maxRetries = 3, delay = 500)
+    @Timeout(5000)
+    @CircuitBreaker(
+            requestVolumeThreshold = CIRCUIT_BREAKER_REQUEST_VOLUME,
+            failureRatio = CIRCUIT_BREAKER_FAILURE_RATIO,
+            delay = CIRCUIT_BREAKER_DELAY_MS
+    )
+    @CircuitBreakerName("remove-subscriber-cb")
+    @Bulkhead(value = DEFAULT_BULKHEAD_VALUE)
+    @CacheInvalidate(cacheName = "user-cache")
+    public Uni<UserDTO> removeSubscriber(
+            @Parameter(description = "User ID", example = "user-123", required = true)
+            String userId,
+            @Parameter(description = "Subscriber ID to remove", example = "user-456", required = true)
+            String subscriberId) {
+        log.debug("Removing subscriber {} from user {}", subscriberId, userId);
+        return userRepository.removeSubscriberFromUser(userId, subscriberId)
+                .onItem().invoke(user -> log.debug("Successfully removed subscriber {} from user {}", subscriberId, userId))
+                .onFailure().transform(e -> new RuntimeException("Failed to remove subscriber from user", e));
+    }
+
+    @Operation(summary = "Add message to user",
+            description = "Adds a message to a user's messages list")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Message added to user's list"),
+            @APIResponse(responseCode = "404", description = "User not found"),
+            @APIResponse(responseCode = "400", description = "Bad request or operation failed")
+    })
+    @Retry(maxRetries = 3, delay = 500)
+    @Timeout(5000)
+    @CircuitBreaker(
+            requestVolumeThreshold = CIRCUIT_BREAKER_REQUEST_VOLUME,
+            failureRatio = CIRCUIT_BREAKER_FAILURE_RATIO,
+            delay = CIRCUIT_BREAKER_DELAY_MS
+    )
+    @CircuitBreakerName("add-message-cb")
+    @Bulkhead(value = DEFAULT_BULKHEAD_VALUE)
+    @CacheInvalidate(cacheName = "user-cache")
+    public Uni<UserDTO> addMessage(
+            @Parameter(description = "User ID", example = "user-123", required = true)
+            String userId,
+            @Parameter(description = "Message ID to add", example = "msg-789", required = true)
+            String messageId) {
+        log.debug("Adding message {} to user {}", messageId, userId);
+        return userRepository.addMessageToUser(userId, messageId)
+                .onItem().invoke(user -> log.debug("Successfully added message {} to user {}", messageId, userId))
+                .onFailure().transform(e -> new RuntimeException("Failed to add message to user", e));
+    }
+
+    @Operation(summary = "Remove message from user",
+            description = "Removes a message from a user's messages list")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Message removed from user's list"),
+            @APIResponse(responseCode = "404", description = "User not found"),
+            @APIResponse(responseCode = "400", description = "Bad request or operation failed")
+    })
+    @Retry(maxRetries = 3, delay = 500)
+    @Timeout(5000)
+    @CircuitBreaker(
+            requestVolumeThreshold = CIRCUIT_BREAKER_REQUEST_VOLUME,
+            failureRatio = CIRCUIT_BREAKER_FAILURE_RATIO,
+            delay = CIRCUIT_BREAKER_DELAY_MS
+    )
+    @CircuitBreakerName("remove-message-cb")
+    @Bulkhead(value = DEFAULT_BULKHEAD_VALUE)
+    @CacheInvalidate(cacheName = "user-cache")
+    public Uni<UserDTO> removeMessage(
+            @Parameter(description = "User ID", example = "user-123", required = true)
+            String userId,
+            @Parameter(description = "Message ID to remove", example = "msg-789", required = true)
+            String messageId) {
+        log.debug("Removing message {} from user {}", messageId, userId);
+        return userRepository.removeMessageFromUser(userId, messageId)
+                .onItem().invoke(user -> log.debug("Successfully removed message {} from user {}", messageId, userId))
+                .onFailure().transform(e -> new RuntimeException("Failed to remove message from user", e));
+    }
+
+    @Operation(summary = "Find users by subscriber",
+            description = "Searches for users who have a specific subscriber in their subscribers list")
+    @APIResponse(responseCode = "200", description = "List returned (may be empty)")
+    @Retry(maxRetries = 2, delay = 500)
+    @Timeout(3000)
+    @CircuitBreaker(
+            requestVolumeThreshold = CIRCUIT_BREAKER_REQUEST_VOLUME,
+            failureRatio = CIRCUIT_BREAKER_FAILURE_RATIO,
+            delay = CIRCUIT_BREAKER_DELAY_MS
+    )
+    @CircuitBreakerName("get-users-by-subscriber-cb")
+    @Bulkhead(value = DEFAULT_BULKHEAD_VALUE)
+    @CacheResult(cacheName = "users-by-subscriber-cache")
+    public Uni<List<UserDTO>> getUsersBySubscriber(
+            @Parameter(description = "Subscriber ID", example = "user-456", required = true)
+            String subscriberId) {
+        log.debug("Finding users with subscriber: {}", subscriberId);
+        return userRepository.findUsersBySubscriber(subscriberId)
+                .onItem().invoke(users -> log.debug("Found {} users with subscriber {}", users.size(), subscriberId))
+                .onFailure().transform(e -> new RuntimeException("Failed to find users by subscriber: " + subscriberId, e));
+    }
+
+    @Operation(summary = "Find users by message",
+            description = "Searches for users who have a specific message in their messages list")
+    @APIResponse(responseCode = "200", description = "List returned (may be empty)")
+    @Retry(maxRetries = 2, delay = 500)
+    @Timeout(3000)
+    @CircuitBreaker(
+            requestVolumeThreshold = CIRCUIT_BREAKER_REQUEST_VOLUME,
+            failureRatio = CIRCUIT_BREAKER_FAILURE_RATIO,
+            delay = CIRCUIT_BREAKER_DELAY_MS
+    )
+    @CircuitBreakerName("get-users-by-message-cb")
+    @Bulkhead(value = DEFAULT_BULKHEAD_VALUE)
+    @CacheResult(cacheName = "users-by-message-cache")
+    public Uni<List<UserDTO>> getUsersByMessage(
+            @Parameter(description = "Message ID", example = "msg-789", required = true)
+            String messageId) {
+        log.debug("Finding users with message: {}", messageId);
+        return userRepository.findUsersByMessage(messageId)
+                .onItem().invoke(users -> log.debug("Found {} users with message {}", users.size(), messageId))
+                .onFailure().transform(e -> new RuntimeException("Failed to find users by message: " + messageId, e));
+    }
 }

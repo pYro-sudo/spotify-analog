@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NonNull;
@@ -13,7 +14,7 @@ import java.util.List;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true, allowGetters = true, allowSetters = true)
-@JsonPropertyOrder({"id", "songListId", "albumListId"})
+@JsonPropertyOrder({"id", "songListId", "albumListId", "subscribers", "messages"})
 @Schema(
         name = "User",
         description = "Represents a system user"
@@ -44,4 +45,21 @@ public class UserDTO {
             required = true
     )
     private List<String> albumListId;
+
+    @JsonProperty("subscribers")
+    @NonNull
+    @NotEmpty
+    @Schema(
+            description = "List of subscribers IDs of the user",
+            required = true
+    )
+    private List<String> subscribers;
+
+    @JsonProperty("messages")
+    @NonNull
+    @Schema(
+            description = "List of message IDs of the user",
+            required = true
+    )
+    private List<String> messages;
 }

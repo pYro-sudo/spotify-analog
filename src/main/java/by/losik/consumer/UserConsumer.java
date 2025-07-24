@@ -853,4 +853,346 @@ public class UserConsumer extends BaseConsumer {
                     }
                 });
     }
+
+    @Operation(summary = "Add subscriber to user",
+            description = "Adds a subscriber to a user's subscribers list. " +
+                    "Requires 'add-subscriber' operation permission.")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Subscriber successfully added"),
+            @APIResponse(responseCode = "403", description = "Forbidden - missing required permissions"),
+            @APIResponse(responseCode = "404", description = "User not found")
+    })
+    @Parameters({
+            @Parameter(name = "userId", description = "ID of the user to modify", required = true),
+            @Parameter(name = "subscriberId", description = "ID of the subscriber to add", required = true)
+    })
+    @Incoming("user-add-subscriber-in")
+    @Outgoing("user-add-subscriber-out")
+    public Uni<ProcessingResult> processAddSubscriber(@NotNull IncomingRabbitMQMessage<String> message) {
+        Timer.Sample timer = startTimer();
+        recordCount("add-subscriber", false, UNKNOWN);
+
+        return authService.isAuthorizedForOperation(message, "add-subscriber")
+                .onItem().transformToUni(authorized -> {
+                    if (!authorized) {
+                        ProcessingResult result = createForbiddenResult();
+                        recordMetrics(timer, "add-subscriber", result);
+                        return Uni.createFrom().item(result)
+                                .onItem().invoke(() -> message.nack(new SecurityException("Forbidden")));
+                    }
+
+                    try {
+                        JsonObject payload = new JsonObject(message.getPayload());
+                        String userId = payload.getString("userId");
+                        String subscriberId = payload.getString("subscriberId");
+
+                        return userService.addSubscriber(userId, subscriberId)
+                                .onItem().transform(updated -> createSuccessResult(
+                                        userId,
+                                        "Subscriber added successfully to user"
+                                ))
+                                .onFailure().recoverWithItem(error -> createErrorResult(
+                                        userId,
+                                        error,
+                                        "Failed to add subscriber to user"
+                                ))
+                                .onItem().invoke(result -> {
+                                    recordMetrics(timer, "add-subscriber", result);
+                                    acknowledgeMessage(message, result.status());
+                                    logProcessingResult(result);
+                                });
+                    } catch (Exception e) {
+                        ProcessingResult errorResult = createErrorResult(
+                                UNKNOWN,
+                                e,
+                                "Unexpected error during subscriber addition"
+                        );
+                        recordMetrics(timer, "add-subscriber", errorResult);
+                        message.nack(e);
+                        return Uni.createFrom().item(errorResult);
+                    }
+                });
+    }
+
+    @Operation(summary = "Remove subscriber from user",
+            description = "Removes a subscriber from a user's subscribers list. " +
+                    "Requires 'remove-subscriber' operation permission.")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Subscriber successfully removed"),
+            @APIResponse(responseCode = "403", description = "Forbidden - missing required permissions"),
+            @APIResponse(responseCode = "404", description = "User not found")
+    })
+    @Parameters({
+            @Parameter(name = "userId", description = "ID of the user to modify", required = true),
+            @Parameter(name = "subscriberId", description = "ID of the subscriber to remove", required = true)
+    })
+    @Incoming("user-remove-subscriber-in")
+    @Outgoing("user-remove-subscriber-out")
+    public Uni<ProcessingResult> processRemoveSubscriber(@NotNull IncomingRabbitMQMessage<String> message) {
+        Timer.Sample timer = startTimer();
+        recordCount("remove-subscriber", false, UNKNOWN);
+
+        return authService.isAuthorizedForOperation(message, "remove-subscriber")
+                .onItem().transformToUni(authorized -> {
+                    if (!authorized) {
+                        ProcessingResult result = createForbiddenResult();
+                        recordMetrics(timer, "remove-subscriber", result);
+                        return Uni.createFrom().item(result)
+                                .onItem().invoke(() -> message.nack(new SecurityException("Forbidden")));
+                    }
+
+                    try {
+                        JsonObject payload = new JsonObject(message.getPayload());
+                        String userId = payload.getString("userId");
+                        String subscriberId = payload.getString("subscriberId");
+
+                        return userService.removeSubscriber(userId, subscriberId)
+                                .onItem().transform(updated -> createSuccessResult(
+                                        userId,
+                                        "Subscriber removed successfully from user"
+                                ))
+                                .onFailure().recoverWithItem(error -> createErrorResult(
+                                        userId,
+                                        error,
+                                        "Failed to remove subscriber from user"
+                                ))
+                                .onItem().invoke(result -> {
+                                    recordMetrics(timer, "remove-subscriber", result);
+                                    acknowledgeMessage(message, result.status());
+                                    logProcessingResult(result);
+                                });
+                    } catch (Exception e) {
+                        ProcessingResult errorResult = createErrorResult(
+                                UNKNOWN,
+                                e,
+                                "Unexpected error during subscriber removal"
+                        );
+                        recordMetrics(timer, "remove-subscriber", errorResult);
+                        message.nack(e);
+                        return Uni.createFrom().item(errorResult);
+                    }
+                });
+    }
+
+    @Operation(summary = "Add message to user",
+            description = "Adds a message to a user's messages list. " +
+                    "Requires 'add-message' operation permission.")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Message successfully added"),
+            @APIResponse(responseCode = "403", description = "Forbidden - missing required permissions"),
+            @APIResponse(responseCode = "404", description = "User not found")
+    })
+    @Parameters({
+            @Parameter(name = "userId", description = "ID of the user to modify", required = true),
+            @Parameter(name = "messageId", description = "ID of the message to add", required = true)
+    })
+    @Incoming("user-add-message-in")
+    @Outgoing("user-add-message-out")
+    public Uni<ProcessingResult> processAddMessage(@NotNull IncomingRabbitMQMessage<String> message) {
+        Timer.Sample timer = startTimer();
+        recordCount("add-message", false, UNKNOWN);
+
+        return authService.isAuthorizedForOperation(message, "add-message")
+                .onItem().transformToUni(authorized -> {
+                    if (!authorized) {
+                        ProcessingResult result = createForbiddenResult();
+                        recordMetrics(timer, "add-message", result);
+                        return Uni.createFrom().item(result)
+                                .onItem().invoke(() -> message.nack(new SecurityException("Forbidden")));
+                    }
+
+                    try {
+                        JsonObject payload = new JsonObject(message.getPayload());
+                        String userId = payload.getString("userId");
+                        String messageId = payload.getString("messageId");
+
+                        return userService.addMessage(userId, messageId)
+                                .onItem().transform(updated -> createSuccessResult(
+                                        userId,
+                                        "Message added successfully to user"
+                                ))
+                                .onFailure().recoverWithItem(error -> createErrorResult(
+                                        userId,
+                                        error,
+                                        "Failed to add message to user"
+                                ))
+                                .onItem().invoke(result -> {
+                                    recordMetrics(timer, "add-message", result);
+                                    acknowledgeMessage(message, result.status());
+                                    logProcessingResult(result);
+                                });
+                    } catch (Exception e) {
+                        ProcessingResult errorResult = createErrorResult(
+                                UNKNOWN,
+                                e,
+                                "Unexpected error during message addition"
+                        );
+                        recordMetrics(timer, "add-message", errorResult);
+                        message.nack(e);
+                        return Uni.createFrom().item(errorResult);
+                    }
+                });
+    }
+
+    @Operation(summary = "Remove message from user",
+            description = "Removes a message from a user's messages list. " +
+                    "Requires 'remove-message' operation permission.")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Message successfully removed"),
+            @APIResponse(responseCode = "403", description = "Forbidden - missing required permissions"),
+            @APIResponse(responseCode = "404", description = "User not found")
+    })
+    @Parameters({
+            @Parameter(name = "userId", description = "ID of the user to modify", required = true),
+            @Parameter(name = "messageId", description = "ID of the message to remove", required = true)
+    })
+    @Incoming("user-remove-message-in")
+    @Outgoing("user-remove-message-out")
+    public Uni<ProcessingResult> processRemoveMessage(@NotNull IncomingRabbitMQMessage<String> message) {
+        Timer.Sample timer = startTimer();
+        recordCount("remove-message", false, UNKNOWN);
+
+        return authService.isAuthorizedForOperation(message, "remove-message")
+                .onItem().transformToUni(authorized -> {
+                    if (!authorized) {
+                        ProcessingResult result = createForbiddenResult();
+                        recordMetrics(timer, "remove-message", result);
+                        return Uni.createFrom().item(result)
+                                .onItem().invoke(() -> message.nack(new SecurityException("Forbidden")));
+                    }
+
+                    try {
+                        JsonObject payload = new JsonObject(message.getPayload());
+                        String userId = payload.getString("userId");
+                        String messageId = payload.getString("messageId");
+
+                        return userService.removeMessage(userId, messageId)
+                                .onItem().transform(updated -> createSuccessResult(
+                                        userId,
+                                        "Message removed successfully from user"
+                                ))
+                                .onFailure().recoverWithItem(error -> createErrorResult(
+                                        userId,
+                                        error,
+                                        "Failed to remove message from user"
+                                ))
+                                .onItem().invoke(result -> {
+                                    recordMetrics(timer, "remove-message", result);
+                                    acknowledgeMessage(message, result.status());
+                                    logProcessingResult(result);
+                                });
+                    } catch (Exception e) {
+                        ProcessingResult errorResult = createErrorResult(
+                                UNKNOWN,
+                                e,
+                                "Unexpected error during message removal"
+                        );
+                        recordMetrics(timer, "remove-message", errorResult);
+                        message.nack(e);
+                        return Uni.createFrom().item(errorResult);
+                    }
+                });
+    }
+
+    @Operation(summary = "Find users by subscriber",
+            description = "Retrieves users who have a specific subscriber in their subscribers list. " +
+                    "Requires general read authorization.")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Users successfully retrieved"),
+            @APIResponse(responseCode = "401", description = "Unauthorized - missing valid credentials")
+    })
+    @Parameter(name = "subscriberId", description = "ID of the subscriber to query", required = true)
+    @Incoming("user-get-by-subscriber-in")
+    @Outgoing("user-get-by-subscriber-out")
+    public Uni<ProcessingResult> processGetUsersBySubscriber(@NotNull IncomingRabbitMQMessage<String> message) {
+        Timer.Sample timer = startTimer();
+        recordCount("get-by-subscriber", false, UNKNOWN);
+
+        return authService.isAuthorized(message)
+                .onItem().transformToUni(authorized -> {
+                    if (!authorized) {
+                        ProcessingResult result = createUnauthorizedResult();
+                        recordMetrics(timer, "get-by-subscriber", result);
+                        return Uni.createFrom().item(result)
+                                .onItem().invoke(() -> message.nack(new SecurityException("Unauthorized")));
+                    }
+
+                    try {
+                        String subscriberId = message.getPayload();
+                        return userService.getUsersBySubscriber(subscriberId)
+                                .onItem().transform(users -> createSuccessResult(
+                                        subscriberId,
+                                        "Users retrieved successfully"
+                                ))
+                                .onFailure().recoverWithItem(error -> createErrorResult(
+                                        subscriberId,
+                                        error,
+                                        "Failed to retrieve users"
+                                ))
+                                .onItem().invoke(result -> {
+                                    recordMetrics(timer, "get-by-subscriber", result);
+                                    acknowledgeMessage(message, result.status());
+                                });
+                    } catch (Exception e) {
+                        ProcessingResult result = createErrorResult(
+                                UNKNOWN,
+                                e,
+                                "Failed to process get request"
+                        );
+                        recordMetrics(timer, "get-by-subscriber", result);
+                        return Uni.createFrom().item(result);
+                    }
+                });
+    }
+
+    @Operation(summary = "Find users by message",
+            description = "Retrieves users who have a specific message in their messages list. " +
+                    "Requires general read authorization.")
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Users successfully retrieved"),
+            @APIResponse(responseCode = "401", description = "Unauthorized - missing valid credentials")
+    })
+    @Parameter(name = "messageId", description = "ID of the message to query", required = true)
+    @Incoming("user-get-by-message-in")
+    @Outgoing("user-get-by-message-out")
+    public Uni<ProcessingResult> processGetUsersByMessage(@NotNull IncomingRabbitMQMessage<String> message) {
+        Timer.Sample timer = startTimer();
+        recordCount("get-by-message", false, UNKNOWN);
+
+        return authService.isAuthorized(message)
+                .onItem().transformToUni(authorized -> {
+                    if (!authorized) {
+                        ProcessingResult result = createUnauthorizedResult();
+                        recordMetrics(timer, "get-by-message", result);
+                        return Uni.createFrom().item(result)
+                                .onItem().invoke(() -> message.nack(new SecurityException("Unauthorized")));
+                    }
+
+                    try {
+                        String messageId = message.getPayload();
+                        return userService.getUsersByMessage(messageId)
+                                .onItem().transform(users -> createSuccessResult(
+                                        messageId,
+                                        "Users retrieved successfully"
+                                ))
+                                .onFailure().recoverWithItem(error -> createErrorResult(
+                                        messageId,
+                                        error,
+                                        "Failed to retrieve users"
+                                ))
+                                .onItem().invoke(result -> {
+                                    recordMetrics(timer, "get-by-message", result);
+                                    acknowledgeMessage(message, result.status());
+                                });
+                    } catch (Exception e) {
+                        ProcessingResult result = createErrorResult(
+                                UNKNOWN,
+                                e,
+                                "Failed to process get request"
+                        );
+                        recordMetrics(timer, "get-by-message", result);
+                        return Uni.createFrom().item(result);
+                    }
+                });
+    }
 }

@@ -373,4 +373,225 @@ public class UserRepository extends ReactiveElasticsearchRepository<UserDTO> {
                     return false;
                 });
     }
+
+    @Operation(
+            summary = "Add subscriber to user",
+            description = "Adds a subscriber to a user's subscribers list if not already present"
+    )
+    @APIResponses({
+            @APIResponse(
+                    responseCode = "200",
+                    description = "Subscriber added to user's list",
+                    content = @Content(schema = @Schema(implementation = UserDTO.class))
+            ),
+            @APIResponse(
+                    responseCode = "404",
+                    description = "User not found"
+            ),
+            @APIResponse(
+                    responseCode = "400",
+                    description = "Bad request or operation failed"
+            )
+    })
+    public Uni<UserDTO> addSubscriberToUser(
+            @Parameter(
+                    name = "userId",
+                    description = "ID of the user to update",
+                    required = true,
+                    example = "user-123"
+            ) String userId,
+            @Parameter(
+                    name = "subscriberId",
+                    description = "ID of the subscriber to add",
+                    required = true,
+                    example = "user-456"
+            ) String subscriberId) {
+        return findUserById(userId)
+                .onItem().transformToUni(user -> {
+                    if (!user.getSubscribers().contains(subscriberId)) {
+                        user.getSubscribers().add(subscriberId);
+                        return saveUser(user);
+                    }
+                    return Uni.createFrom().item(user);
+                });
+    }
+
+    @Operation(
+            summary = "Remove subscriber from user",
+            description = "Removes a subscriber from a user's subscribers list"
+    )
+    @APIResponses({
+            @APIResponse(
+                    responseCode = "200",
+                    description = "Subscriber removed from user's list",
+                    content = @Content(schema = @Schema(implementation = UserDTO.class))
+            ),
+            @APIResponse(
+                    responseCode = "404",
+                    description = "User not found"
+            ),
+            @APIResponse(
+                    responseCode = "400",
+                    description = "Bad request or operation failed"
+            )
+    })
+    public Uni<UserDTO> removeSubscriberFromUser(
+            @Parameter(
+                    name = "userId",
+                    description = "ID of the user to update",
+                    required = true,
+                    example = "user-123"
+            ) String userId,
+            @Parameter(
+                    name = "subscriberId",
+                    description = "ID of the subscriber to remove",
+                    required = true,
+                    example = "user-456"
+            ) String subscriberId) {
+        return findUserById(userId)
+                .onItem().transformToUni(user -> {
+                    user.getSubscribers().remove(subscriberId);
+                    return saveUser(user);
+                });
+    }
+
+    @Operation(
+            summary = "Add message to user",
+            description = "Adds a message to a user's messages list"
+    )
+    @APIResponses({
+            @APIResponse(
+                    responseCode = "200",
+                    description = "Message added to user's list",
+                    content = @Content(schema = @Schema(implementation = UserDTO.class))
+            ),
+            @APIResponse(
+                    responseCode = "404",
+                    description = "User not found"
+            ),
+            @APIResponse(
+                    responseCode = "400",
+                    description = "Bad request or operation failed"
+            )
+    })
+    public Uni<UserDTO> addMessageToUser(
+            @Parameter(
+                    name = "userId",
+                    description = "ID of the user to update",
+                    required = true,
+                    example = "user-123"
+            ) String userId,
+            @Parameter(
+                    name = "messageId",
+                    description = "ID of the message to add",
+                    required = true,
+                    example = "msg-789"
+            ) String messageId) {
+        return findUserById(userId)
+                .onItem().transformToUni(user -> {
+                    user.getMessages().add(messageId);
+                    return saveUser(user);
+                });
+    }
+
+    @Operation(
+            summary = "Remove message from user",
+            description = "Removes a message from a user's messages list"
+    )
+    @APIResponses({
+            @APIResponse(
+                    responseCode = "200",
+                    description = "Message removed from user's list",
+                    content = @Content(schema = @Schema(implementation = UserDTO.class))
+            ),
+            @APIResponse(
+                    responseCode = "404",
+                    description = "User not found"
+            ),
+            @APIResponse(
+                    responseCode = "400",
+                    description = "Bad request or operation failed"
+            )
+    })
+    public Uni<UserDTO> removeMessageFromUser(
+            @Parameter(
+                    name = "userId",
+                    description = "ID of the user to update",
+                    required = true,
+                    example = "user-123"
+            ) String userId,
+            @Parameter(
+                    name = "messageId",
+                    description = "ID of the message to remove",
+                    required = true,
+                    example = "msg-789"
+            ) String messageId) {
+        return findUserById(userId)
+                .onItem().transformToUni(user -> {
+                    user.getMessages().remove(messageId);
+                    return saveUser(user);
+                });
+    }
+
+    @Operation(
+            summary = "Find users by subscriber",
+            description = "Searches for users who have a specific subscriber in their subscribers list using exact term matching"
+    )
+    @APIResponses({
+            @APIResponse(
+                    responseCode = "200",
+                    description = "Search completed successfully",
+                    content = @Content(schema = @Schema(implementation = UserDTO[].class))
+            ),
+            @APIResponse(
+                    responseCode = "400",
+                    description = "Bad request or search failed"
+            )
+    })
+    public Uni<List<UserDTO>> findUsersBySubscriber(
+            @Parameter(
+                    name = "subscriberId",
+                    description = "Exact subscriber ID to search for in user subscribers lists",
+                    required = true,
+                    example = "user-456"
+            ) String subscriberId) {
+        JsonObject query = new JsonObject()
+                .put("query", new JsonObject()
+                        .put("term", new JsonObject()
+                                .put("subscribers.keyword", subscriberId)));
+
+        return search(query)
+                .onFailure().invoke(e -> log.error("Search by subscriber failed for {}", subscriberId, e));
+    }
+
+    @Operation(
+            summary = "Find users by message",
+            description = "Searches for users who have a specific message in their messages list using exact term matching"
+    )
+    @APIResponses({
+            @APIResponse(
+                    responseCode = "200",
+                    description = "Search completed successfully",
+                    content = @Content(schema = @Schema(implementation = UserDTO[].class))
+            ),
+            @APIResponse(
+                    responseCode = "400",
+                    description = "Bad request or search failed"
+            )
+    })
+    public Uni<List<UserDTO>> findUsersByMessage(
+            @Parameter(
+                    name = "messageId",
+                    description = "Exact message ID to search for in user messages lists",
+                    required = true,
+                    example = "msg-789"
+            ) String messageId) {
+        JsonObject query = new JsonObject()
+                .put("query", new JsonObject()
+                        .put("term", new JsonObject()
+                                .put("messages.keyword", messageId)));
+
+        return search(query)
+                .onFailure().invoke(e -> log.error("Search by message failed for {}", messageId, e));
+    }
 }
