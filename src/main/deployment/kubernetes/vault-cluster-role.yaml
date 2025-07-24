@@ -1,0 +1,38 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vault-server
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts", "serviceaccounts/token"]
+    verbs: ["get", "list", "watch", "create", "patch"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vault-server
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-token-refresher
+  namespace: default
+secrets: []

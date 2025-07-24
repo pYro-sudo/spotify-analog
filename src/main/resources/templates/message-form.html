@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create New Message</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        #formFeedback { margin: 20px 0; padding: 10px; display: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<h1>Create New Message</h1>
+
+<div id="formFeedback"></div>
+
+<form id="messageForm">
+    <div class="form-group">
+        <label for="authorization">Authorization Token:</label>
+        <input type="text" id="authorization" required>
+    </div>
+
+    <div class="form-group">
+        <label for="aggregateId">Aggregate ID (optional):</label>
+        <input type="text" id="aggregateId" name="aggregateId" placeholder="Will be generated if empty">
+    </div>
+
+    <div class="form-group">
+        <label for="eventType">Event Type:</label>
+        <input type="text" id="eventType" name="eventType" required>
+    </div>
+
+    <div class="form-group">
+        <label for="payload">Payload (JSON):</label>
+        <textarea id="payload" name="payload" rows="6" required></textarea>
+    </div>
+
+    <button type="submit">Submit Message</button>
+</form>
+
+<script>
+    document.getElementById('messageForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const authToken = document.getElementById('authorization').value;
+
+        const feedback = document.getElementById('formFeedback');
+        feedback.style.display = 'none';
+
+        try {
+            JSON.parse(document.getElementById('payload').value);
+        } catch (err) {
+            feedback.style.display = 'block';
+            feedback.style.backgroundColor = '#f2dede';
+            feedback.style.color = '#a94442';
+            feedback.textContent = 'Error: Payload must be valid JSON';
+            return;
+        }
+
+        fetch('/spotify-ripoff/messages', {
+            method: 'POST',
+            headers: {
+                'Authorization': authToken,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams(formData)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => { throw new Error(text) });
+                }
+                return response.json();
+            })
+            .then(data => {
+                feedback.style.display = 'block';
+                feedback.style.backgroundColor = '#dff0d8';
+                feedback.style.color = '#3c763d';
+                feedback.textContent = 'Message created successfully! ID: ' + data.id;
+            })
+            .catch(error => {
+                feedback.style.display = 'block';
+                feedback.style.backgroundColor = '#f2dede';
+                feedback.style.color = '#a94442';
+                feedback.textContent = 'Error: ' + error.message;
+            });
+    });
+</script>
+</body>
+</html>

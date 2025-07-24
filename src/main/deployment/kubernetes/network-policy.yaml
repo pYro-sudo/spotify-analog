@@ -1,0 +1,41 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quarkus-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: quarkus-app
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              app: ingress-nginx
+  egress:
+    - ports:
+        - port: 6379
+          protocol: TCP
+        - port: 5432
+          protocol: TCP
+        - port: 9092
+          protocol: TCP
+        - port: 2181
+      to:
+        - podSelector:
+            matchLabels:
+              app: redis
+        - podSelector:
+            matchLabels:
+              app: postgres
+        - podSelector:
+            matchLabels:
+              app: kafka
+        - podSelector:
+            matchLabels:
+              app: zookeeper

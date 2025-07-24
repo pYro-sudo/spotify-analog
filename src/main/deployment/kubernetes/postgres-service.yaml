@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  ports:
+    - port: 5432
+      name: postgres
+  clusterIP: None
+  selector:
+    app: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-primary
+  labels:
+    app: postgres
+    role: primary
+spec:
+  ports:
+    - port: 5432
+      name: postgres
+  selector:
+    app: postgres
+    statefulset.kubernetes.io/pod-name: postgres-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replicas
+  labels:
+    app: postgres
+    role: replica
+spec:
+  ports:
+    - port: 5432
+      name: postgres
+  selector:
+    app: postgres
+    statefulset.kubernetes.io/pod-name: postgres-1
