@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  metrics-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: 1.0
+    image: metrics-cli:latest
+    environment:
+      - QUARKUS_DATASOURCE_REACTIVE_URL=vertx-reactive:postgresql://metrics-db:5432/metrics_db
+      - QUARKUS_DATASOURCE_USERNAME=metrics_user
+      - QUARKUS_DATASOURCE_PASSWORD=metrics_pass
+      - QUARKUS_REDIS_HOST=metrics-redis
+      - FRONT_METRICS_API_MP_REST_URL=http://front-service:8080
+      - ELASTIC_METRICS_API_MP_REST_URL=http://elastic-service:8080
+      - DISTRIBUTOR_METRICS_API_MP_REST_URL=http://distributor-service:8080
+      - POSTGRES_METRICS_API_MP_REST_URL=http://postgres-service:8080
+    depends_on:
+      - metrics-db
+      - metrics-redis
+    ports:
+      - "8080:8080"
+    networks:
+      - metrics-network
+
+  metrics-db:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=metrics_user
+      - POSTGRES_PASSWORD=metrics_pass
+      - POSTGRES_DB=metrics_db
+    volumes:
+      - metrics-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - metrics-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metrics_user -d metrics_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  metrics-redis:
+    image: redis:7
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - metrics-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  metrics-data:
+  redis-data:
+
+networks:
+  metrics-network:
+    driver: bridge
