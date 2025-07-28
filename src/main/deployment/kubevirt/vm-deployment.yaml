@@ -1,0 +1,41 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: k8s-node-3
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: k8s-node-3
+    spec:
+      domain:
+        resources:
+          requests:
+            memory: 8Gi
+            cpu: 4
+        devices:
+          disks:
+            - name: rootdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              bridge: {}
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: rootdisk
+          persistentVolumeClaim:
+            claimName: k8s-node-3-rootdisk
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: k8s-node-3
+              ssh_authorized_keys:
+                - ssh-rsa ##key
