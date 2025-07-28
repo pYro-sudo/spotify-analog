@@ -7,7 +7,7 @@ stages:
   - verify
 
 variables:
-  KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
+  KUBECONFIG: "/etc/kubernetes/admin.conf"
   DOMAIN: "yourdomain.com"  # Replace with your actual domain
   VM_NAME: "k8s-node-1"
 
