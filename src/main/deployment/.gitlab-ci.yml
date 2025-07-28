@@ -73,7 +73,6 @@ setup_kubeconfig:
     - mkdir -p $(dirname $KUBECONFIG)
     - kubectl get secret ${VM_NAME}-kubeconfig -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner -o jsonpath='{.data.value}' | base64 -d > $KUBECONFIG
     - chmod 600 $KUBECONFIG
-    # Verify kubeconfig works with minimal permissions
     - kubectl get pods -n ${VM_NAMESPACE} --kubeconfig=$KUBECONFIG
   needs: ["deploy_vm"]
   tags:
