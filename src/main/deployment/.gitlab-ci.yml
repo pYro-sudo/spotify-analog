@@ -85,7 +85,7 @@ setup_nginx:
       VM_POD=$(kubectl get pods -n ${VM_NAMESPACE} -l kubevirt.io/domain=$VM_NAME --kubeconfig=$KUBECONFIG -o jsonpath='{.items[0].metadata.name}')
       kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "useradd ci-runner -m -s /bin/bash && echo 'ci-runner ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/nginx, /usr/bin/systemctl' > /etc/sudoers.d/ci-runner && chmod 440 /etc/sudoers.d/ci-runner"
       kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo apt-get update && sudo -u ci-runner sudo apt-get install -y nginx"
-      cat <<EOF > elsatic-adapter.conf
+      cat <<EOF > elastic-adapter.conf
       worker_processes auto;
       worker_rlimit_nofile 100000;
       
@@ -96,9 +96,9 @@ setup_nginx:
       }
       
       http {
-          $(grep -A 1000 '^http {' elsatic-adapter.conf | tail -n +2)
+          $(grep -A 1000 '^http {' elastic-adapter.conf | tail -n +2)
       EOF
-      kubectl cp nginx/elsatic-adapter.conf ${VM_NAMESPACE}/$VM_POD:/etc/nginx/nginx.conf
+      kubectl cp nginx/elastic-adapter.conf ${VM_NAMESPACE}/$VM_POD:/etc/nginx/nginx.conf
       kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo nginx -t && sudo -u ci-runner sudo systemctl restart nginx"
       kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo systemctl enable nginx"
   needs: ["setup_kubeconfig"]
