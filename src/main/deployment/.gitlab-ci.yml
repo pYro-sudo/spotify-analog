@@ -8,7 +8,7 @@ stages:
 
 variables:
   KUBECONFIG: "/etc/kubernetes/admin.conf"
-  DOMAIN: "yourdomain.com"  # Replace with your actual domain
+  DOMAIN: "yourdomain.com" # Replace with the actual one
   VM_NAME: "k8s-node-1"
 
 deploy_vm:
@@ -21,6 +21,10 @@ deploy_vm:
           break
         fi
         sleep 10
+        if [ $i -eq 30 ]; then
+          echo "VM failed to become ready"
+          exit 1
+        fi
       done
   tags:
     - k8s
@@ -41,7 +45,7 @@ setup_nginx:
     - |
       VM_POD=$(kubectl get pods -l kubevirt.io/domain=$VM_NAME -o jsonpath='{.items[0].metadata.name}')
       kubectl exec $VM_POD -- bash -c "apt-get update && apt-get install -y nginx"
-      cat <<EOF > elsatic-adapter.conf
+      cat <<'EOF' > elastic-adapter.conf
       worker_processes auto;
       worker_rlimit_nofile 100000;
       
@@ -52,9 +56,13 @@ setup_nginx:
       }
       
       http {
-          $(grep -A 1000 '^http {' elsatic-adapter.conf | tail -n +2)
+          include /etc/nginx/mime.types;
+          default_type application/octet-stream;
+          sendfile on;
+          keepalive_timeout 65;
+      }
       EOF
-      kubectl cp elsatic-adapter.conf $VM_POD:/etc/nginx/nginx.conf
+      kubectl cp elastic-adapter.conf $VM_POD:/etc/nginx/nginx.conf
       kubectl exec $VM_POD -- bash -c "nginx -t && systemctl restart nginx"
       kubectl exec $VM_POD -- systemctl enable nginx
   needs: ["setup_kubeconfig"]
@@ -73,6 +81,10 @@ deploy_infrastructure:
           break
         fi
         sleep 10
+        if [ $i -eq 30 ]; then
+          echo "Vault failed to start"
+          exit 1
+        fi
       done
     - kubectl apply -f redis-deployment.yaml
     - kubectl apply -f rabbitmq-deployment.yaml
@@ -85,6 +97,10 @@ deploy_infrastructure:
           break
         fi
         sleep 10
+        if [ $i -eq 30 ]; then
+          echo "Elasticsearch failed to start"
+          exit 1
+        fi
       done
   needs: ["setup_nginx"]
   tags:
@@ -125,6 +141,10 @@ verify_deployment:
           break
         fi
         sleep 10
+        if [ $i -eq 10 ]; then
+          echo "Health check failed"
+          exit 1
+        fi
       done
   needs: ["deploy_application"]
   tags:
