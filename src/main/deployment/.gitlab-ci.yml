@@ -1,0 +1,181 @@
+stages:
+  - build
+  - rbac_setup
+  - deploy_vm
+  - setup_kubeconfig
+  - setup_nginx
+  - deploy_infra
+  - deploy_app
+  - verify
+
+variables:
+  KUBECONFIG: "/etc/kubernetes/ci-runner.conf"
+  DOMAIN: "yourdomain.com"
+  VM_NAME: "k8s-node-3"
+  CI_NAMESPACE: "gitlab-ci-3"
+  VM_NAMESPACE: "vm-namespace-3"
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  DOCKER_HOST: tcp://docker:2375
+
+build:
+  stage: build
+  image: docker:24.0
+  services:
+    - docker:24.0-dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_TAG -f Dockerfile .
+    - docker push $IMAGE_TAG
+  tags:
+    - docker
+  artifacts:
+    paths:
+      - docker/Dockerfile
+
+rbac_setup:
+  stage: rbac_setup
+  script:
+    - |
+      cat <<EOF | kubectl apply -f -
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: ${CI_NAMESPACE}
+      ---
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: ${VM_NAMESPACE}
+      EOF
+    - kubectl apply -f kubernetes/rbac.yaml
+    - kubectl apply -f kubevirt/rbac.yaml
+  tags:
+    - k8s
+
+deploy_vm:
+  stage: deploy_vm
+  script:
+    - kubectl apply -f kubevirt/vm-deployment.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - |
+      for i in {1..30}; do
+        if kubectl get vm $VM_NAME -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner -o jsonpath='{.status.ready}' | grep -q "true"; then
+          break
+        fi
+        sleep 10
+      done
+  needs: ["rbac_setup"]
+  tags:
+    - k8s
+
+setup_kubeconfig:
+  stage: setup_kubeconfig
+  script:
+    - mkdir -p $(dirname $KUBECONFIG)
+    - kubectl get secret ${VM_NAME}-kubeconfig -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner -o jsonpath='{.data.value}' | base64 -d > $KUBECONFIG
+    - chmod 600 $KUBECONFIG
+    - kubectl get pods -n ${VM_NAMESPACE} --kubeconfig=$KUBECONFIG
+  needs: ["deploy_vm"]
+  tags:
+    - k8s
+
+setup_nginx:
+  stage: setup_nginx
+  script:
+    - |
+      VM_POD=$(kubectl get pods -n ${VM_NAMESPACE} -l kubevirt.io/domain=$VM_NAME --kubeconfig=$KUBECONFIG -o jsonpath='{.items[0].metadata.name}')
+      kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "useradd ci-runner -m -s /bin/bash && echo 'ci-runner ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/nginx, /usr/bin/systemctl' > /etc/sudoers.d/ci-runner && chmod 440 /etc/sudoers.d/ci-runner"
+      kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo apt-get update && sudo -u ci-runner sudo apt-get install -y nginx"
+      cat <<EOF > elastic-adapter.conf
+      worker_processes auto;
+      worker_rlimit_nofile 100000;
+      
+      events {
+          worker_connections 4096;
+          multi_accept on;
+          use epoll;
+      }
+      
+      http {
+          $(grep -A 1000 '^http {' elastic-adapter.conf | tail -n +2)
+      EOF
+      kubectl cp nginx/elastic-adapter.conf ${VM_NAMESPACE}/$VM_POD:/etc/nginx/nginx.conf
+      kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo nginx -t && sudo -u ci-runner sudo systemctl restart nginx"
+      kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo systemctl enable nginx"
+  needs: ["setup_kubeconfig"]
+  tags:
+    - k8s
+
+deploy_infrastructure:
+  stage: deploy_infra
+  script:
+    - kubectl apply -f kubernetes/service-account.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/vault-cluster-role.yaml --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/vault.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - |
+      for i in {1..30}; do
+        if kubectl get pods -n ${VM_NAMESPACE} -l app=vault --field-selector=status.phase=Running --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner | grep -q "vault"; then
+          break
+        fi
+        sleep 10
+      done
+    - kubectl apply -f kubernetes/redis-deployment.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/rabbitmq-deployment.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/zookeeper.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/kafka-ss.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/kafka-service.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/postgres-secrets.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/postgres-deployment.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/postgres-service.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/elasticsearch-deployment.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/elastic-discovery-service.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/cert-manager.yaml --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - |
+      for i in {1..30}; do
+        if kubectl get pods -n ${VM_NAMESPACE} -l app=elasticsearch --field-selector=status.phase=Running --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner | grep -q "elasticsearch"; then
+          break
+        fi
+        sleep 10
+      done
+  needs: ["setup_nginx"]
+  tags:
+    - k8s
+
+deploy_application:
+  stage: deploy_app
+  script:
+    - kubectl apply -f kubernetes/app-config.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/app-secrets.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/vault-agent-config.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/quarkus-pdb.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/quarkus-deployment.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/quarkus-service.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/quarkus-hpa.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/network-policy-np.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - sed -i "s/yourdomain.com/$DOMAIN/g" kubernetes/ingress.yaml
+    - kubectl apply -f kubernetes/ingress.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl apply -f kubernetes/vault-job.yaml -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+  needs: ["deploy_infrastructure"]
+  tags:
+    - k8s
+
+verify_deployment:
+  stage: verify
+  script:
+    - kubectl get pods -n ${VM_NAMESPACE} -o wide --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl get svc -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - kubectl get ingress -n ${VM_NAMESPACE} --as=system:serviceaccount:${CI_NAMESPACE}:gitlab-runner
+    - |
+      VM_POD=$(kubectl get pods -n ${VM_NAMESPACE} -l kubevirt.io/domain=$VM_NAME --kubeconfig=$KUBECONFIG -o jsonpath='{.items[0].metadata.name}')
+      kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo nginx -t"
+      kubectl exec -n ${VM_NAMESPACE} $VM_POD -- bash -c "sudo -u ci-runner sudo systemctl status nginx"
+    - |
+      ENDPOINT="http://$DOMAIN/health"
+      for i in {1..10}; do
+        if curl -s -o /dev/null -w "%{http_code}" $ENDPOINT | grep -q "200"; then
+          break
+        fi
+        sleep 10
+      done
+  needs: ["deploy_application"]
+  tags:
+    - k8s
