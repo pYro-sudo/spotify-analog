@@ -1,3 +1,3 @@
 # spotify-analog
 
-welocme
+welcome
