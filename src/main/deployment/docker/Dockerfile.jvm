@@ -1,0 +1,15 @@
+FROM quay.io/quarkus/quarkus-distroless-image:2.0 as builder
+WORKDIR /project
+COPY . .
+RUN ./mvnw package -DskipTests
+
+FROM quay.io/quarkus/quarkus-distroless-image:2.0
+WORKDIR /work/
+COPY --from=builder /project/target/quarkus-app/lib/ /work/lib/
+COPY --from=builder /project/target/quarkus-app/*.jar /work/
+COPY --from=builder /project/target/quarkus-app/app/ /work/app/
+COPY --from=builder /project/target/quarkus-app/quarkus/ /work/quarkus/
+COPY src/main/resources/publicKey.pem /work/publicKey.pem
+
+EXPOSE 8080
+CMD ["java", "-jar", "quarkus-run.jar"]
