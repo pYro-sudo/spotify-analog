@@ -1,6 +1,3 @@
-# spotify-analog
+# spotify-analog 
 
-welcome
-
-
-(not finished!)
+welcome 
